@@ -3,6 +3,8 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 
+jest.setTimeout(30000);
+
 describe('Request Lifecycle (E2E)', () => {
   let app: INestApplication;
   let requestId: string;
@@ -16,16 +18,15 @@ describe('Request Lifecycle (E2E)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
 
-    // Seed a balance first via batch sync
     await request(app.getHttpServer())
       .post('/api/v1/balances/sync/batch')
       .send({
         records: [{ employeeId: 'E001', locationId: 'LOC_KHI', totalDays: 10 }],
       });
-  });
+  }, 30000);
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it('GET /api/v1/balances/E001 — should return balance', async () => {

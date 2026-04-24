@@ -1,16 +1,15 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
-import { SyncType, SyncStatus } from '../../common/enums/sync-type.enum';
 
 @Entity()
 export class SyncLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  syncType: SyncType;
+  @Column({ type: 'text' })
+  syncType: string;
 
-  @Column()
-  status: SyncStatus;
+  @Column({ type: 'text' })
+  status: string;
 
   @Column({ default: 0 })
   recordsProcessed: number;

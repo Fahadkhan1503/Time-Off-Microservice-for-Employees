@@ -1,5 +1,22 @@
 {
-  "E001_LOC_KHI": { "employeeId": "E001", "locationId": "LOC_KHI", "totalDays": 10 },
-  "E002_LOC_KHI": { "employeeId": "E002", "locationId": "LOC_KHI", "totalDays": 15 },
-  "E003_LOC_LHR": { "employeeId": "E003", "locationId": "LOC_LHR", "totalDays": 8 }
+  "E001_LOC_KHI": {
+    "employeeId": "E001",
+    "locationId": "LOC_KHI",
+    "totalDays": 10
+  },
+  "E002_LOC_KHI": {
+    "employeeId": "E002",
+    "locationId": "LOC_KHI",
+    "totalDays": 15
+  },
+  "E003_LOC_LHR": {
+    "employeeId": "E003",
+    "locationId": "LOC_LHR",
+    "totalDays": 8
+  },
+  "E011_LOC_KHI": {
+    "employeeId": "E011",
+    "locationId": "LOC_KHI",
+    "totalDays": 20
+  }
 }

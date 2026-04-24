@@ -2,11 +2,20 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
+import { getRepository } from 'typeorm';
+import { DataSource } from 'typeorm';
+import { LeaveBalance } from '../../src/balance/entities/leave-balance.entity';
+import { TimeOffRequest } from '../../src/request/entities/time-off-request.entity';
+import { SyncLog } from '../../src/sync/entities/sync-log.entity';
+import { unlink } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 jest.setTimeout(30000);
 
 describe('Request Lifecycle (E2E)', () => {
   let app: INestApplication;
+  let dataSource: DataSource;
   let requestId: string;
 
   beforeAll(async () => {
@@ -15,24 +24,36 @@ describe('Request Lifecycle (E2E)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    dataSource = app.get(DataSource);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
 
-    await request(app.getHttpServer())
+    // Seed initial balance
+    const syncRes = await request(app.getHttpServer())
       .post('/api/v1/balances/sync/batch')
       .send({
         records: [{ employeeId: 'E001', locationId: 'LOC_KHI', totalDays: 10 }],
       });
+    
+    console.log('Sync batch response:', syncRes.status, syncRes.body);
   }, 30000);
 
   afterAll(async () => {
     if (app) await app.close();
+    
+    // Clean up test database
+    try {
+      await unlink(join(tmpdir(), 'test-timeoff.db'));
+    } catch (e) {
+      // File might not exist
+    }
   });
 
   it('GET /api/v1/balances/E001 — should return balance', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/balances/E001')
       .expect(200);
+    console.log('Get balances response:', res.body);
     expect(res.body.length).toBeGreaterThan(0);
     expect(res.body[0].employeeId).toBe('E001');
   });

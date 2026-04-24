@@ -6,6 +6,7 @@ import { LeaveBalance } from '../../src/balance/entities/leave-balance.entity';
 import { HcmService } from '../../src/hcm/hcm.service';
 import { RequestStatus } from '../../src/common/enums/request-status.enum';
 import { UnprocessableEntityException, ConflictException, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 
 const mockRequestRepo = {
   find: jest.fn(),
@@ -24,6 +25,22 @@ const mockHcmService = {
   restoreBalance: jest.fn(),
 };
 
+const mockQueryRunner = {
+  connect: jest.fn().mockResolvedValue(undefined),
+  startTransaction: jest.fn().mockResolvedValue(undefined),
+  commitTransaction: jest.fn().mockResolvedValue(undefined),
+  rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+  release: jest.fn().mockResolvedValue(undefined),
+  manager: {
+    findOne: jest.fn(),
+    save: jest.fn(),
+  },
+};
+
+const mockDataSource = {
+  createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner),
+};
+
 describe('RequestService', () => {
   let service: RequestService;
 
@@ -34,6 +51,7 @@ describe('RequestService', () => {
         { provide: getRepositoryToken(TimeOffRequest), useValue: mockRequestRepo },
         { provide: getRepositoryToken(LeaveBalance), useValue: mockBalanceRepo },
         { provide: HcmService, useValue: mockHcmService },
+        { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
 
@@ -93,32 +111,51 @@ describe('RequestService', () => {
   describe('approve', () => {
     it('should approve a pending request and sync with HCM', async () => {
       const request = { id: 'uuid1', status: RequestStatus.PENDING, employeeId: 'E001', locationId: 'LOC_KHI', days: 3 };
-      mockRequestRepo.findOne.mockResolvedValue(request);
-      mockBalanceRepo.findOne.mockResolvedValue({ totalDays: 10, usedDays: 0, pendingDays: 3 });
+      const balance = { totalDays: 10, usedDays: 0, pendingDays: 3 };
+      
+      mockQueryRunner.manager.findOne.mockImplementation((entity, options) => {
+        if (entity === TimeOffRequest) return Promise.resolve(request);
+        if (entity === LeaveBalance) return Promise.resolve(balance);
+        return Promise.resolve(null);
+      });
+      
+      mockQueryRunner.manager.save.mockResolvedValue({});
       mockHcmService.deductBalance.mockResolvedValue(true);
-      mockBalanceRepo.save.mockResolvedValue({});
-      mockRequestRepo.save.mockResolvedValue({ ...request, status: RequestStatus.APPROVED });
 
       const result = await service.approve('uuid1', { managerId: 'M001' });
-      expect(result.status).toBe(RequestStatus.APPROVED);
+      expect(result.status).toBe(RequestStatus.APPROVED as string);
       expect(mockHcmService.deductBalance).toHaveBeenCalledWith('E001', 'LOC_KHI', 3);
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
     });
 
     it('should throw if request is not PENDING', async () => {
-      mockRequestRepo.findOne.mockResolvedValue({ status: RequestStatus.APPROVED });
+      const request = { id: 'uuid1', status: RequestStatus.APPROVED, employeeId: 'E001', locationId: 'LOC_KHI', days: 3 };
+      
+      mockQueryRunner.manager.findOne.mockImplementation((entity, options) => {
+        if (entity === TimeOffRequest) return Promise.resolve(request);
+        return Promise.resolve(null);
+      });
 
       await expect(service.approve('uuid1', { managerId: 'M001' }))
         .rejects.toThrow(ConflictException);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
     });
 
     it('should throw if HCM sync fails', async () => {
       const request = { id: 'uuid1', status: RequestStatus.PENDING, employeeId: 'E001', locationId: 'LOC_KHI', days: 3 };
-      mockRequestRepo.findOne.mockResolvedValue(request);
-      mockBalanceRepo.findOne.mockResolvedValue({ totalDays: 10, usedDays: 0, pendingDays: 3 });
+      const balance = { totalDays: 10, usedDays: 0, pendingDays: 3 };
+      
+      mockQueryRunner.manager.findOne.mockImplementation((entity, options) => {
+        if (entity === TimeOffRequest) return Promise.resolve(request);
+        if (entity === LeaveBalance) return Promise.resolve(balance);
+        return Promise.resolve(null);
+      });
+      
       mockHcmService.deductBalance.mockRejectedValue(new Error('HCM down'));
 
       await expect(service.approve('uuid1', { managerId: 'M001' }))
         .rejects.toThrow(ConflictException);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
     });
   });
 
@@ -144,31 +181,50 @@ describe('RequestService', () => {
   describe('cancel', () => {
     it('should cancel a PENDING request', async () => {
       const request = { id: 'uuid1', status: RequestStatus.PENDING, employeeId: 'E001', locationId: 'LOC_KHI', days: 3 };
-      mockRequestRepo.findOne.mockResolvedValue(request);
-      mockBalanceRepo.findOne.mockResolvedValue({ totalDays: 10, usedDays: 0, pendingDays: 3 });
-      mockBalanceRepo.save.mockResolvedValue({});
-      mockRequestRepo.save.mockResolvedValue({ ...request, status: RequestStatus.CANCELLED });
+      const balance = { totalDays: 10, usedDays: 0, pendingDays: 3 };
+      
+      mockQueryRunner.manager.findOne.mockImplementation((entity, options) => {
+        if (entity === TimeOffRequest) return Promise.resolve(request);
+        if (entity === LeaveBalance) return Promise.resolve(balance);
+        return Promise.resolve(null);
+      });
+      
+      mockQueryRunner.manager.save.mockResolvedValue({});
 
       const result = await service.cancel('uuid1');
-      expect(result.status).toBe(RequestStatus.CANCELLED);
+      expect(result.status).toBe(RequestStatus.CANCELLED as string);
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
     });
 
     it('should cancel an APPROVED request and restore HCM balance', async () => {
       const request = { id: 'uuid1', status: RequestStatus.APPROVED, employeeId: 'E001', locationId: 'LOC_KHI', days: 3 };
-      mockRequestRepo.findOne.mockResolvedValue(request);
-      mockBalanceRepo.findOne.mockResolvedValue({ totalDays: 10, usedDays: 3, pendingDays: 0 });
+      const balance = { totalDays: 10, usedDays: 3, pendingDays: 0 };
+      
+      mockQueryRunner.manager.findOne.mockImplementation((entity, options) => {
+        if (entity === TimeOffRequest) return Promise.resolve(request);
+        if (entity === LeaveBalance) return Promise.resolve(balance);
+        return Promise.resolve(null);
+      });
+      
+      mockQueryRunner.manager.save.mockResolvedValue({});
       mockHcmService.restoreBalance.mockResolvedValue(true);
-      mockBalanceRepo.save.mockResolvedValue({});
-      mockRequestRepo.save.mockResolvedValue({ ...request, status: RequestStatus.CANCELLED });
 
       const result = await service.cancel('uuid1');
-      expect(result.status).toBe(RequestStatus.CANCELLED);
-      expect(mockHcmService.restoreBalance).toHaveBeenCalled();
+      expect(result.status).toBe(RequestStatus.CANCELLED as string);
+      expect(mockHcmService.restoreBalance).toHaveBeenCalledWith('E001', 'LOC_KHI', 3);
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
     });
 
     it('should throw if request cannot be cancelled', async () => {
-      mockRequestRepo.findOne.mockResolvedValue({ status: RequestStatus.REJECTED });
+      const request = { id: 'uuid1', status: RequestStatus.REJECTED, employeeId: 'E001', locationId: 'LOC_KHI', days: 3 };
+      
+      mockQueryRunner.manager.findOne.mockImplementation((entity, options) => {
+        if (entity === TimeOffRequest) return Promise.resolve(request);
+        return Promise.resolve(null);
+      });
+
       await expect(service.cancel('uuid1')).rejects.toThrow(ConflictException);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
     });
   });
 

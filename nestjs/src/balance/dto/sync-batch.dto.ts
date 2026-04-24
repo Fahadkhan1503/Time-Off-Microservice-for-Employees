@@ -1,9 +1,14 @@
-import { IsArray, ValidateNested } from 'class-validator';
+import { IsArray, ValidateNested, IsString, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SyncRecordDto {
+  @IsString()
   employeeId: string;
+
+  @IsString()
   locationId: string;
+
+  @IsNumber()
   totalDays: number;
 }
 

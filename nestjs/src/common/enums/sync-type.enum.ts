@@ -1,0 +1,11 @@
+export enum SyncType {
+  BATCH_INBOUND = 'BATCH_INBOUND',
+  REALTIME_INBOUND = 'REALTIME_INBOUND',
+  OUTBOUND = 'OUTBOUND',
+}
+
+export enum SyncStatus {
+  SUCCESS = 'SUCCESS',
+  PARTIAL = 'PARTIAL',
+  FAILED = 'FAILED',
+}

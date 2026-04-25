@@ -58,7 +58,7 @@ export class BalanceService {
     await this.syncLogRepo.save({
       syncType: SyncType.REALTIME_INBOUND,
       status: SyncStatus.SUCCESS,
-      recordsProcessed: 1,
+      recordsProcessed: 1
     });
 
     return balance;

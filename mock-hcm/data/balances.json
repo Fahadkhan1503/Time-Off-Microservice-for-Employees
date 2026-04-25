@@ -17,6 +17,11 @@
   "E011_LOC_KHI": {
     "employeeId": "E011",
     "locationId": "LOC_KHI",
-    "totalDays": 20
+    "totalDays": 25
+  },
+  "E012_LOC_KHI": {
+    "employeeId": "E012",
+    "locationId": "LOC_ISB",
+    "totalDays": 35
   }
 }

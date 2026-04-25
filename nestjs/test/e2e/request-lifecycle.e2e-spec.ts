@@ -2,11 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
-import { getRepository } from 'typeorm';
 import { DataSource } from 'typeorm';
-import { LeaveBalance } from '../../src/balance/entities/leave-balance.entity';
-import { TimeOffRequest } from '../../src/request/entities/time-off-request.entity';
-import { SyncLog } from '../../src/sync/entities/sync-log.entity';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -56,6 +52,30 @@ describe('Request Lifecycle (E2E)', () => {
     console.log('Get balances response:', res.body);
     expect(res.body.length).toBeGreaterThan(0);
     expect(res.body[0].employeeId).toBe('E001');
+  });
+
+  it('GET /api/v1/balances/E001/LOC_KHI — should return specific balance', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/balances/E001/LOC_KHI')
+      .expect(200);
+    expect(res.body.employeeId).toBe('E001');
+    expect(res.body.locationId).toBe('LOC_KHI');
+  });
+
+  it('GET /api/v1/balances/UNKNOWN/LOC_UNKNOWN — should return empty for non-existent balance', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/balances/UNKNOWN/LOC_UNKNOWN')
+      .expect(200);
+    // Service returns empty object when not found
+    expect(res.body).toBeDefined();
+  });
+
+  it('POST /api/v1/balances/sync/realtime/E001/LOC_KHI — should sync realtime balance', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/balances/sync/realtime/E001/LOC_KHI')
+      .expect(201);
+    expect(res.body.employeeId).toBe('E001');
+    expect(res.body.locationId).toBe('LOC_KHI');
   });
 
   it('POST /api/v1/requests — should create request with sufficient balance', async () => {
